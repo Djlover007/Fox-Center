@@ -1,0 +1,6 @@
+{
+  "appId": "de.foxcenter.app",
+  "appName": "Fox Center",
+  "webDir": "www",
+  "android": { "backgroundColor": "#0c0c0f", "allowMixedContent": true }
+}
