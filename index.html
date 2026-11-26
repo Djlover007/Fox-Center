@@ -366,7 +366,8 @@ function fsrc(u){if(!u)return '';if(/^(content|file):/.test(u)||u.charAt(0)==='/
 var tT;function toast(m,ms){var t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tT);tT=setTimeout(function(){t.classList.remove('on');},ms||3800);}
 var C=plug('Center');
 
-var set=Object.assign({theme:'dark',tmdb:'',minMovie:40,autoUpd:true,sort:'new',deep:false,engine:'auto'},load('fc-set',{}));
+var set=Object.assign({theme:'dark',tmdb:'',minMovie:0,autoUpd:true,sort:'new',deep:false,engine:'auto'},load('fc-set',{}));
+if(!set.mv2){set.minMovie=0;set.mv2=1;save('fc-set',set);} // neu: standardmaessig alle Videos zeigen
 var repos=load('fc-repos',[]);       // {id,url,name,kind,t,tv:[ids],src:[ids]}
 var deepOk=false,deepInfo=load('fc-deepinfo',null);
 function applyTheme(){if(set.theme==='system')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',set.theme);}
@@ -908,7 +909,7 @@ function rVideo(){
     var list=V.movies.slice();
     if(set.sort==='az')list.sort(function(a,b){return vTitle(a).localeCompare(vTitle(b),'de');});else list.sort(function(a,b){return (b.date||0)-(a.date||0);});
     if(!set.deep)h+=deepNote();
-    if(!list.length)return h+empty('film','Noch keine Filme','Fox Center zeigt hier Videos ab '+set.minMovie+' Minuten. Kürzere findest du unter „Ordner“.');
+    if(!list.length)return h+empty('film','Noch keine Filme',(set.minMovie?'Fox Center zeigt hier Videos ab '+set.minMovie+' Minuten. Kürzere findest du unter „Ordner“.':'Auf dem Gerät wurden noch keine Videos gefunden.'));
     return h+'<div class="row" style="justify-content:flex-end">'+chip('sort','new','Neueste',set.sort!=='az')+chip('sort','az','A–Z',set.sort==='az')+'</div><div class="grid">'+list.map(vcard).join('')+'</div>';
   }
   if(vchip==='shows'){
@@ -1188,7 +1189,7 @@ async function settingsSheet(){
   openSheet('<h3>Einstellungen</h3>'+
     '<div class="srow"><b>Aussehen</b><div class="chips">'+chip('theme','dark','Dunkel',set.theme==='dark')+chip('theme','light','Hell',set.theme==='light')+chip('theme','system','Wie Gerät',set.theme==='system')+'</div></div>'+
     '<div class="srow"><b>Player</b><div class="chips">'+chip('engine','auto','Automatisch',set.engine==='auto')+chip('engine','vlc','Immer VLC',set.engine==='vlc')+chip('engine','exo','Nur Standard',set.engine==='exo')+'</div><small>Automatisch: Fox Center nimmt den schnellen Android-Player und wechselt bei AVI, MPG, WMV, RMVB, DivX, AC3/DTS-Ton & Co. von selbst zur VLC-Engine.</small></div>'+
-    '<div class="srow"><b>Als Film zählen ab</b><div class="chips">'+[20,40,60].map(function(n){return chip('minmov',n,n+' Minuten',set.minMovie===n);}).join('')+'</div><small>Kürzere Videos (z. B. Handy-Clips) findest du unter Videos › Ordner.</small></div>'+
+    '<div class="srow"><b>In „Filme“ anzeigen</b><div class="chips">'+[0,20,40,60].map(function(n){return chip('minmov',n,n?'ab '+n+' Min.':'Alle Videos',set.minMovie===n);}).join('')+'</div><small>„Alle Videos“ zeigt jedes Video als Film. Mit einer Mindestlänge blendest du kurze Handy-Clips aus – die findest du dann unter Videos › Ordner.</small></div>'+
     '<div class="srow"><b>Poster und Inhalt (TMDb)</b><small>Mit einem kostenlosen Schlüssel von themoviedb.org zeigt Fox Center Bilder, Bewertung und Inhalt zu deinen Filmen und Serien.</small><input type="text" id="tmk" placeholder="API-Schlüssel einfügen" value="'+esc(set.tmdb)+'" autocomplete="off" autocapitalize="off"><button class="btn sm" data-act="tmsave">Speichern</button></div>'+
     '<div class="srow line"><div><b>Ganzes Handy durchsuchen</b><br><small>'+(set.deep?(deepOk?'Aktiv'+(deepInfo?' · zuletzt '+deepInfo.added+' zusätzliche Dateien gefunden':''):'Zugriff auf alle Dateien fehlt noch – tippe auf den Schalter'):'Auch Ordner wie Download, WhatsApp, Telegram und die SD-Karte')+'</small></div><input type="checkbox" class="sw" id="deepSw"'+(set.deep&&deepOk?' checked':'')+' aria-label="Ganzes Handy durchsuchen"></div>'+
     '<button class="srow" style="border:0;text-align:left" data-act="repos"><b>Repos</b><small>'+(repos.length?repos.length+' eingefügt · ':'')+'Links zu Senderlisten, Mediaservern und Fox-Repos einfügen</small></button>'+
