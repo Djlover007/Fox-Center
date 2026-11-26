@@ -10,6 +10,11 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.media.MediaMetadataRetriever;
+import android.media.ThumbnailUtils;
+import android.os.Environment;
+import android.provider.Settings;
 import android.graphics.Color;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
@@ -172,6 +177,7 @@ public class CenterPlugin extends Plugin {
                         }
                         o.put("folder", folder);
                         o.put("bucket", col(c, "bucket_display_name"));
+                        o.put("path", col(c, MediaStore.MediaColumns.DATA));
                         if ("audio".equals(kind)) {
                             o.put("title", col(c, MediaStore.Audio.Media.TITLE));
                             o.put("artist", col(c, MediaStore.Audio.Media.ARTIST));
@@ -230,7 +236,9 @@ public class CenterPlugin extends Plugin {
                 if (!f.exists() || f.length() == 0) {
                     Bitmap bm = null;
                     Uri u = Uri.parse(uri);
-                    if (Build.VERSION.SDK_INT >= 29) {
+                    if (uri.startsWith("file://") || uri.startsWith("/")) {
+                        bm = fileThumb(new File(uri.startsWith("file://") ? u.getPath() : uri), w, h);
+                    } else if (Build.VERSION.SDK_INT >= 29) {
                         bm = getContext().getContentResolver().loadThumbnail(u, new Size(w, h), null);
                     } else {
                         long id = ContentUris.parseId(u);
@@ -253,6 +261,196 @@ public class CenterPlugin extends Plugin {
                 call.resolve(r);
             } catch (Exception e) {
                 call.reject("kein Bild");
+            }
+        }).start();
+    }
+
+    private static final java.util.regex.Pattern VID = java.util.regex.Pattern.compile("(?i).*\\.(mp4|m4v|mkv|avi|mov|webm|ts|m2ts|mts|wmv|flv|mpe?g|3gp|vob|ogv)$");
+    private static final java.util.regex.Pattern AUD = java.util.regex.Pattern.compile("(?i).*\\.(mp3|flac|m4a|aac|ogg|oga|opus|wav|wma|aiff?)$");
+    private static final java.util.regex.Pattern IMG = java.util.regex.Pattern.compile("(?i).*\\.(jpe?g|png|gif|webp|heic|bmp)$");
+
+    private Bitmap fileThumb(File f, int w, int h) {
+        String n = f.getName();
+        try {
+            if (VID.matcher(n).matches()) {
+                if (Build.VERSION.SDK_INT >= 29) {
+                    return ThumbnailUtils.createVideoThumbnail(f, new Size(w, h), null);
+                }
+                return ThumbnailUtils.createVideoThumbnail(f.getAbsolutePath(), MediaStore.Video.Thumbnails.MINI_KIND);
+            }
+            if (IMG.matcher(n).matches()) {
+                if (Build.VERSION.SDK_INT >= 29) {
+                    return ThumbnailUtils.createImageThumbnail(f, new Size(w, h), null);
+                }
+                BitmapFactory.Options o = new BitmapFactory.Options();
+                o.inJustDecodeBounds = true;
+                BitmapFactory.decodeFile(f.getAbsolutePath(), o);
+                int s = 1;
+                while (o.outWidth / (s * 2) >= w && o.outHeight / (s * 2) >= h) {
+                    s *= 2;
+                }
+                BitmapFactory.Options o2 = new BitmapFactory.Options();
+                o2.inSampleSize = s;
+                return BitmapFactory.decodeFile(f.getAbsolutePath(), o2);
+            }
+            if (AUD.matcher(n).matches()) {
+                MediaMetadataRetriever r = new MediaMetadataRetriever();
+                r.setDataSource(f.getAbsolutePath());
+                byte[] pic = r.getEmbeddedPicture();
+                r.release();
+                if (pic != null) {
+                    return BitmapFactory.decodeByteArray(pic, 0, pic.length);
+                }
+            }
+        } catch (Exception ignored) {
+            // kein Bild
+        }
+        return null;
+    }
+
+    // ---------------- Ganzes Geraet durchsuchen ----------------
+    private boolean allFilesOk() {
+        if (Build.VERSION.SDK_INT >= 30) {
+            return Environment.isExternalStorageManager();
+        }
+        return hasPerm(Manifest.permission.READ_EXTERNAL_STORAGE);
+    }
+
+    @PluginMethod
+    public void allFiles(PluginCall call) {
+        JSObject o = new JSObject();
+        o.put("granted", allFilesOk());
+        call.resolve(o);
+    }
+
+    @PluginMethod
+    public void askAllFiles(PluginCall call) {
+        try {
+            Activity a = getActivity();
+            if (Build.VERSION.SDK_INT >= 30) {
+                Intent i = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:" + getContext().getPackageName()));
+                try {
+                    a.startActivity(i);
+                } catch (Exception e) {
+                    a.startActivity(new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION));
+                }
+            } else {
+                ActivityCompat.requestPermissions(a, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 4712);
+            }
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Einstellung lässt sich nicht öffnen");
+        }
+    }
+
+    private int walked;
+
+    private void walkDir(File dir, File root, int depth, JSArray out, Set<String> seen) {
+        if (depth > 14 || walked > 25000) {
+            return;
+        }
+        File[] list = dir.listFiles();
+        if (list == null) {
+            return;
+        }
+        if (depth > 0 && new File(dir, ".nomedia").exists() && depth > 3) {
+            return;
+        }
+        for (File f : list) {
+            String n = f.getName();
+            if (n.startsWith(".")) {
+                continue;
+            }
+            if (f.isDirectory()) {
+                String rel = f.getAbsolutePath().substring(root.getAbsolutePath().length());
+                if (rel.equalsIgnoreCase("/Android/data") || rel.equalsIgnoreCase("/Android/obb")) {
+                    continue;
+                }
+                walkDir(f, root, depth + 1, out, seen);
+                continue;
+            }
+            walked++;
+            String kind = VID.matcher(n).matches() ? "video" : AUD.matcher(n).matches() ? "audio" : IMG.matcher(n).matches() ? "image" : null;
+            if (kind == null) {
+                continue;
+            }
+            long size = f.length();
+            if (("video".equals(kind) && size < 1000000) || ("image".equals(kind) && size < 30000) || ("audio".equals(kind) && size < 200000)) {
+                continue;
+            }
+            String path = f.getAbsolutePath();
+            if (!seen.add(path)) {
+                continue;
+            }
+            JSObject o = new JSObject();
+            o.put("kind", kind);
+            o.put("path", path);
+            o.put("uri", Uri.fromFile(f).toString());
+            o.put("name", n);
+            o.put("size", size);
+            o.put("date", f.lastModified() / 1000);
+            String rel = dir.getAbsolutePath().substring(root.getAbsolutePath().length());
+            o.put("folder", (rel.startsWith("/") ? rel.substring(1) : rel) + "/");
+            o.put("bucket", dir.getName());
+            o.put("root", root.getAbsolutePath());
+            if ("video".equals(kind) && size > 80000000) {
+                try {
+                    MediaMetadataRetriever r = new MediaMetadataRetriever();
+                    r.setDataSource(path);
+                    String d = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+                    String hh = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT);
+                    r.release();
+                    o.put("dur", d == null ? 0 : Long.parseLong(d));
+                    o.put("h", hh == null ? 0 : Long.parseLong(hh));
+                } catch (Exception ignored) {
+                    o.put("dur", 0);
+                }
+            }
+            out.put(o);
+        }
+    }
+
+    @PluginMethod
+    public void walk(final PluginCall call) {
+        new Thread(() -> {
+            try {
+                walked = 0;
+                JSArray out = new JSArray();
+                Set<String> seen = new HashSet<>();
+                List<File> roots = new ArrayList<>();
+                roots.add(Environment.getExternalStorageDirectory());
+                File[] ext = getContext().getExternalFilesDirs(null);
+                if (ext != null) {
+                    for (File e : ext) {
+                        if (e == null) {
+                            continue;
+                        }
+                        String p = e.getAbsolutePath();
+                        int k = p.indexOf("/Android/data");
+                        if (k > 0) {
+                            File r = new File(p.substring(0, k));
+                            boolean dup = false;
+                            for (File x : roots) {
+                                if (x.getAbsolutePath().equals(r.getAbsolutePath())) {
+                                    dup = true;
+                                }
+                            }
+                            if (!dup) {
+                                roots.add(r);
+                            }
+                        }
+                    }
+                }
+                for (File r : roots) {
+                    walkDir(r, r, 0, out, seen);
+                }
+                JSObject res = new JSObject();
+                res.put("items", out);
+                res.put("checked", walked);
+                res.put("roots", roots.size());
+                call.resolve(res);
+            } catch (Exception e) {
+                call.reject("Suche auf dem Gerät: " + e.getMessage());
             }
         }).start();
     }
@@ -444,7 +642,11 @@ public class CenterPlugin extends Plugin {
             String url = call.getString("url", "");
             String mime = call.getString("mime", "video/*");
             Intent i = new Intent(Intent.ACTION_VIEW);
-            i.setDataAndType(Uri.parse(url), mime);
+            Uri target = Uri.parse(url);
+            if (url.startsWith("file://")) {
+                target = androidx.core.content.FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".foxupdate", new File(target.getPath()));
+            }
+            i.setDataAndType(target, mime);
             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
             getActivity().startActivity(Intent.createChooser(i, "Öffnen mit").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             call.resolve();

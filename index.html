@@ -230,6 +230,9 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .ctl .big svg.i{width:32px;height:32px}
 
 body:has(#mini:not([hidden])) .toast{bottom:calc(150px + env(safe-area-inset-bottom,0px))}
+.quick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.quick .btn{min-height:52px;font-size:15.5px;background:var(--surface);box-shadow:0 1px 0 var(--line)}
+.quick .btn svg.i{width:20px;height:20px;color:var(--accent)}
 /* Bildbetrachter */
 .viewer{position:fixed;inset:0;z-index:70;background:#000;display:flex;align-items:center;justify-content:center;touch-action:pan-y}
 .viewer img,.viewer video{max-width:100%;max-height:100%;object-fit:contain}
@@ -284,7 +287,9 @@ body.kb .card:focus,body.kb .tile:focus,body.kb .pic:focus{transform:scale(1.04)
     <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"/></symbol>
     <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
     <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></symbol>
-    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+    <symbol id="i-repo" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8l9 5z"/><path d="m3 13 9 5 9-5"/><path d="m3 17.5 9 5 9-5" opacity=".6"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/><circle cx="11" cy="9" r="3"/><path d="m13.2 11.2 2.3 2.3"/></symbol>
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></symbol>
     <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 4h3v16H7zM14 4h3v16h-3z"/></symbol>
@@ -361,7 +366,9 @@ function fsrc(u){if(!u)return '';if(/^(content|file):/.test(u)||u.charAt(0)==='/
 var tT;function toast(m,ms){var t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tT);tT=setTimeout(function(){t.classList.remove('on');},ms||3800);}
 var C=plug('Center');
 
-var set=Object.assign({theme:'dark',tmdb:'',minMovie:40,autoUpd:true,sort:'new'},load('fc-set',{}));
+var set=Object.assign({theme:'dark',tmdb:'',minMovie:40,autoUpd:true,sort:'new',deep:false},load('fc-set',{}));
+var repos=load('fc-repos',[]);       // {id,url,name,kind,t,tv:[ids],src:[ids]}
+var deepOk=false,deepInfo=load('fc-deepinfo',null);
 function applyTheme(){if(set.theme==='system')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',set.theme);}
 function saveSet(){save('fc-set',set);applyTheme();}
 applyTheme();
@@ -444,18 +451,31 @@ async function loadLibCache(){
 }
 async function checkPerm(){if(!C)return perm;try{perm=await C.perm();}catch(e){}return perm;}
 function anyPerm(){return perm.video||perm.audio||perm.image;}
+async function checkDeep(){if(!C)return false;try{deepOk=!!(await C.allFiles()).granted;}catch(e){deepOk=false;}return deepOk;}
 async function scanAll(quiet){
   if(!C||scanning)return;
   await checkPerm();
-  if(!anyPerm()){render();return;}
+  if(set.deep)await checkDeep();
+  var deep=set.deep&&deepOk;
+  if(!anyPerm()&&!deep){render();return;}
   scanning=true;render();
   try{
     for(var k of ['video','audio','image']){
+      lib[k]=[];
       if(!perm[k])continue;
-      var r=await C.scan({kind:k});lib[k]=(r&&r.items)||[];await iset('lib-'+k,lib[k]);
+      var r=await C.scan({kind:k});lib[k]=(r&&r.items)||[];
     }
+    if(deep){
+      // ganzes Geraet: alles dazu, was Android nicht in der Mediathek hat
+      var w=await C.walk(),known={},added=0;
+      ['video','audio','image'].forEach(function(k){lib[k].forEach(function(x){if(x.path)known[x.path]=1;});});
+      ((w&&w.items)||[]).forEach(function(x,i){if(known[x.path])return;known[x.path]=1;x.id='f'+i;x.deep=true;lib[x.kind].push(x);added++;});
+      lib.video.sort(function(a,b){return (b.date||0)-(a.date||0);});
+      deepInfo={t:Date.now(),checked:(w&&w.checked)||0,added:added};save('fc-deepinfo',deepInfo);
+    }
+    for(var k2 of ['video','audio','image'])await iset('lib-'+k2,lib[k2]);
     processLib();
-    if(!quiet)toast('Mediathek aktualisiert: '+lib.video.length+' Videos, '+lib.audio.length+' Lieder, '+lib.image.length+' Bilder');
+    if(!quiet)toast((deep?'Ganzes Handy durchsucht: ':'Mediathek aktualisiert: ')+lib.video.length+' Videos, '+lib.audio.length+' Lieder, '+lib.image.length+' Bilder');
   }catch(e){toast('Einlesen fehlgeschlagen: '+errText(e));}
   scanning=false;render();
 }
@@ -821,8 +841,12 @@ function resumeCard(k){
     '<span class="dur">noch '+hms((r.dur-r.pos)/1000)+'</span><i class="bar"><i style="width:'+pr+'%"></i></i></div><div class="cap"><b>'+esc(r.title||'Video')+'</b><small>'+esc(r.sub||'')+'</small></div></button>';
 }
 function empty(icon,title,text,btn){return '<div class="empty">'+ic(icon)+'<b style="color:var(--fg);font-size:17px">'+title+'</b><span>'+text+'</span>'+(btn||'')+'</div>';}
+function deepNote(){
+  if(!isNative()||set.deep)return '';
+  return '<div class="note"><b>Nicht alles gefunden?</b><small>Fox Center kann dein ganzes Handy und die SD-Karte nach Filmen, Serien, Musik und Bildern durchsuchen – auch in Ordnern, die Android nicht anzeigt (z. B. Download, WhatsApp, Telegram).</small><button class="btn pri" data-act="deepon">'+ic('phone')+' Ganzes Handy durchsuchen</button></div>';
+}
 function permNote(){
-  if(!isNative()||anyPerm())return '';
+  if(!isNative()||anyPerm()||(set.deep&&deepOk))return '';
   return '<div class="note"><b>Zugriff auf deine Medien</b><small>Damit Fox Center deine Videos, Musik und Bilder zeigen kann, braucht es einmal deine Erlaubnis.</small><button class="btn pri" data-act="perm">Zugriff erlauben</button></div>';
 }
 function scanLine(){return scanning?'<div class="scan"><span class="spin"></span> Mediathek wird eingelesen …</div>':'';}
@@ -848,6 +872,7 @@ function rHome(){
   var h=permNote()+scanLine();
   var tiles=[['video','movies','film','Filme',V.movies.length],['video','shows','series','Serien',V.shows.length],['music','songs','music','Musik',lib.audio.length],['tv','','tv','Live-TV',tvLists.reduce(function(a,l){return a+(l.count||0);},0)],['pics','','img','Bilder',lib.image.length],['video','net','net','Netzwerk',sources.length]];
   h+='<div class="tiles">'+tiles.map(function(t){return '<button class="tile" data-act="tile" data-t="'+t[0]+'" data-k="'+t[1]+'"><span class="ti">'+ic(t[2])+'</span><b>'+t[3]+'</b><small>'+(t[4]||'–')+'</small></button>';}).join('')+'</div>';
+  h+='<div class="quick"><button class="btn" data-act="settings">'+ic('gear')+' Einstellungen</button><button class="btn" data-act="repos">'+ic('repo')+' Repos'+(repos.length?' ('+repos.length+')':'')+'</button></div>';
   var rk=Object.keys(resume).sort(function(a,b){return resume[b].t-resume[a].t;}).slice(0,15);
   if(rk.length)h+='<div class="sec"><div class="sech"><h2>Weiterschauen</h2></div><div class="rowx">'+rk.map(resumeCard).join('')+'</div></div>';
   // Nächste Folgen
@@ -875,6 +900,7 @@ function rVideo(){
   if(vchip==='movies'){
     var list=V.movies.slice();
     if(set.sort==='az')list.sort(function(a,b){return vTitle(a).localeCompare(vTitle(b),'de');});else list.sort(function(a,b){return (b.date||0)-(a.date||0);});
+    if(!set.deep)h+=deepNote();
     if(!list.length)return h+empty('film','Noch keine Filme','Fox Center zeigt hier Videos ab '+set.minMovie+' Minuten. Kürzere findest du unter „Ordner“.');
     return h+'<div class="row" style="justify-content:flex-end">'+chip('sort','new','Neueste',set.sort!=='az')+chip('sort','az','A–Z',set.sort==='az')+'</div><div class="grid">'+list.map(vcard).join('')+'</div>';
   }
@@ -1151,11 +1177,13 @@ function doSearch(q){
 var appVer=null,upd=null,UPL=false;
 async function loadVer(){var Pu=plug('Updater');if(!Pu||appVer)return;try{var i=await Pu.info();appVer={code:Number(i.versionCode),name:String(i.versionName||'')};}catch(e){}}
 async function settingsSheet(){
-  await loadVer();
+  await loadVer();if(set.deep)await checkDeep();
   openSheet('<h3>Einstellungen</h3>'+
     '<div class="srow"><b>Aussehen</b><div class="chips">'+chip('theme','dark','Dunkel',set.theme==='dark')+chip('theme','light','Hell',set.theme==='light')+chip('theme','system','Wie Gerät',set.theme==='system')+'</div></div>'+
     '<div class="srow"><b>Als Film zählen ab</b><div class="chips">'+[20,40,60].map(function(n){return chip('minmov',n,n+' Minuten',set.minMovie===n);}).join('')+'</div><small>Kürzere Videos (z. B. Handy-Clips) findest du unter Videos › Ordner.</small></div>'+
     '<div class="srow"><b>Poster und Inhalt (TMDb)</b><small>Mit einem kostenlosen Schlüssel von themoviedb.org zeigt Fox Center Bilder, Bewertung und Inhalt zu deinen Filmen und Serien.</small><input type="text" id="tmk" placeholder="API-Schlüssel einfügen" value="'+esc(set.tmdb)+'" autocomplete="off" autocapitalize="off"><button class="btn sm" data-act="tmsave">Speichern</button></div>'+
+    '<div class="srow line"><div><b>Ganzes Handy durchsuchen</b><br><small>'+(set.deep?(deepOk?'Aktiv'+(deepInfo?' · zuletzt '+deepInfo.added+' zusätzliche Dateien gefunden':''):'Zugriff auf alle Dateien fehlt noch – tippe auf den Schalter'):'Auch Ordner wie Download, WhatsApp, Telegram und die SD-Karte')+'</small></div><input type="checkbox" class="sw" id="deepSw"'+(set.deep&&deepOk?' checked':'')+' aria-label="Ganzes Handy durchsuchen"></div>'+
+    '<button class="srow" style="border:0;text-align:left" data-act="repos"><b>Repos</b><small>'+(repos.length?repos.length+' eingefügt · ':'')+'Links zu Senderlisten, Mediaservern und Fox-Repos einfügen</small></button>'+
     '<button class="srow" style="border:0;text-align:left" data-act="rescan"><b>Mediathek neu einlesen</b><small>'+lib.video.length+' Videos · '+lib.audio.length+' Lieder · '+lib.image.length+' Bilder</small></button>'+
     '<button class="srow" style="border:0;text-align:left" data-act="clrres"><b>„Weiterschauen“ leeren</b><small>Entfernt alle angefangenen Videos von der Startseite</small></button>'+
     (isNative()?'<button class="srow" style="border:0;text-align:left" data-act="upd"><b>App-Update</b><small>'+(appVer?'Version '+appVer.code+' · ':'')+'Tippen zum Prüfen'+(upd?' · Neu: '+upd.ver:'')+'</small></button>'+
@@ -1164,6 +1192,7 @@ async function settingsSheet(){
     '<div class="srow"><b>Nur eigene Inhalte</b><small>Fox Center spielt ab, was dir gehört oder frei verfügbar ist. Es bringt keine Filme oder Sender mit.</small></div>'+
     '<p class="hint" style="text-align:center">Fox Center · Design by <b style="color:var(--accent)">Mr.Fox</b></p>');
   var a=$('#autoUpd');if(a)a.addEventListener('change',function(e){set.autoUpd=e.target.checked;saveSet();});
+  var d=$('#deepSw');if(d)d.addEventListener('change',function(e){if(e.target.checked){closeSheet();deepOn();}else{set.deep=false;saveSet();closeSheet();scanAll(false);}});
 }
 async function checkUpdate(manual){
   var Pu=plug('Updater');if(!Pu)return;
@@ -1206,6 +1235,76 @@ async function doUpdate(){
     if(/permission/i.test(m))toast('Erlaube Fox Center in den Einstellungen „Apps installieren“ und tippe danach nochmal auf App-Update.',6000);
     else toast('Update fehlgeschlagen: '+m.slice(0,200),6000);}
 }
+
+/* ================= Ganzes Handy ================= */
+var deepWait=false;
+async function deepOn(){
+  if(!C){toast('Das geht nur in der App.');return;}
+  if(await checkDeep()){set.deep=true;saveSet();toast('Fox Center durchsucht jetzt dein ganzes Handy …',5000);scanAll(false);return;}
+  openSheet('<h3>Ganzes Handy durchsuchen</h3><div class="srow"><b>So geht es</b><small>Gleich öffnen sich die Android-Einstellungen. Schalte dort bei Fox Center <b>„Zugriff auf alle Dateien erlauben“</b> ein und komm mit der Zurück-Taste wieder.</small><small>Fox Center liest die Dateien nur, um sie dir anzuzeigen. Nichts wird verändert oder hochgeladen.</small></div><button class="btn pri wide" data-act="deepgo">Weiter zu den Einstellungen</button><button class="btn wide" data-act="close">Abbrechen</button>');
+}
+
+/* ================= Repos ================= */
+function saveRepos(){save('fc-repos',repos);}
+function reposSheet(){
+  openSheet('<h3>Repos</h3>'+
+    '<div class="srow"><b>Link einfügen</b><small>Fox Center erkennt selbst, was dahinter steckt: M3U-Senderliste, Fox-Repo (JSON mit mehreren Listen und Quellen) oder ein Web-/WebDAV-Ordner mit Filmen und Musik.</small>'+
+      '<input type="text" id="rUrl" placeholder="https://…" autocomplete="off" autocapitalize="off"><input type="text" id="rName" placeholder="Name (freiwillig)">'+
+      '<div class="row"><button class="btn sm" data-act="rpaste">Aus Zwischenablage</button><button class="btn pri" style="flex:1" data-act="repoadd">'+ic('plus')+' Hinzufügen</button></div></div>'+
+    (repos.length?'<p class="lbl" style="margin:4px 0 0">Deine Repos</p>'+repos.map(function(r){return '<div class="srow line"><div style="min-width:0"><b>'+esc(r.name)+'</b><br><small>'+esc(repoKind(r))+(r.info?' · '+esc(r.info):'')+'</small><br><small>'+esc(r.url.replace(/^https?:\/\//,'').slice(0,46))+'</small></div><div class="row" style="flex-wrap:nowrap"><button class="ib sm2" data-act="reporef" data-k="'+r.id+'" aria-label="Aktualisieren">'+ic('refresh')+'</button><button class="ib sm2" data-act="repodel" data-k="'+r.id+'" aria-label="Löschen">'+ic('trash')+'</button></div></div>';}).join(''):'<small class="hint">Noch keine Repos eingefügt.</small>')+
+    '<div class="srow"><b>Kodi-Repositories</b><small>Kodi-Add-ons sind Programme, die nur in Kodi selbst laufen. Fox Center kann sie nicht installieren. Senderlisten (M3U), Mediaserver und Ordner-Links funktionieren aber direkt.</small></div>'+
+    '<details class="srow"><summary><b>Eigenes Fox-Repo bauen</b></summary><small>Eine JSON-Datei, z. B. auf GitHub:</small><pre style="margin:0;font-size:12px;white-space:pre-wrap;background:var(--surface2);padding:10px;border-radius:10px">{\n  "name": "Mein Repo",\n  "tv": [{"name": "Meine Sender", "url": "https://…/liste.m3u"}],\n  "sources": [{"name": "NAS", "type": "webdav", "url": "https://…"}]\n}</pre></details>');
+}
+function repoKind(r){return r.kind==='tv'?'Senderliste':r.kind==='fox'?'Fox-Repo':r.kind==='src'?'Ordner':'Repo';}
+async function addRepo(url,name,old){
+  url=String(url||'').trim();
+  if(!/^https?:\/\//i.test(url)){toast('Bitte einen Link mit http:// oder https:// einfügen.');return;}
+  if(!old&&repos.some(function(r){return r.url===url;})){toast('Dieses Repo ist schon drin.');return;}
+  toast('Repo wird geladen …',15000);
+  try{
+    if(/\.zip(\?|$)/i.test(url))throw new Error('Das ist ein Kodi-Add-on oder -Repository. Kodi-Add-ons laufen nur in Kodi, nicht in Fox Center.');
+    var r=await req(url,{timeout:40000}),t=r.text||'',lt=t.slice(0,4000).trim();
+    if(r.status>=400)throw new Error('Link nicht erreichbar ('+r.status+')');
+    if(/<addons?[\s>]/i.test(lt))throw new Error('Das ist ein Kodi-Repository. Kodi-Add-ons laufen nur in Kodi, nicht in Fox Center.');
+    var rep=old||{id:'r'+Date.now(),url:url,name:name||'',kind:'',t:0,tv:[],src:[]};
+    if(old)removeRepoItems(rep);
+    rep.tv=[];rep.src=[];
+    if(/#EXTM3U|#EXTINF/i.test(lt)){
+      var ch=parseM3U(t);if(!ch.length)throw new Error('In der Liste wurden keine Sender gefunden.');
+      var l={id:'t'+Date.now(),name:rep.name||decodeURIComponent(url.split('?')[0].split('/').pop().replace(/\.[^.]+$/,''))||'Senderliste',url:url,count:ch.length,t:Date.now(),repo:rep.id};
+      tvLists.push(l);tvCh[l.id]=ch;await iset('tv-'+l.id,ch);save('fc-tv',tvLists);
+      rep.kind='tv';rep.name=rep.name||l.name;rep.tv=[l.id];rep.info=ch.length+' Sender';
+    }else if(/^[\[{]/.test(lt)){
+      var j=JSON.parse(t),tvs=[].concat(j.tv||j.iptv||j.playlists||[]),srcs=[].concat(j.sources||j.quellen||[]);
+      if(Array.isArray(j))j.forEach(function(x){if(x&&x.url){if(/m3u/i.test(x.url)||x.type==='tv')tvs.push(x);else srcs.push(x);}});
+      if(!tvs.length&&!srcs.length)throw new Error('Im Repo stehen keine Senderlisten oder Quellen.');
+      var nT=0,nS=0;
+      for(var x of tvs){if(!x||!x.url)continue;try{var l2={id:'t'+Date.now()+nT,name:x.name||'Senderliste',url:x.url,ua:x.ua||x.userAgent||'',count:0,t:0,repo:rep.id};await tvLoad(l2,true);tvLists.push(l2);rep.tv.push(l2.id);nT++;}catch(e){}}
+      srcs.forEach(function(x){if(!x||!x.url)return;var ty=/dlna|upnp/i.test(x.type||'')?'dlna':/dav/i.test(x.type||'')?'webdav':'http';var ns={id:'s'+Date.now()+nS,name:x.name||new URL(x.url).host,type:ty,url:x.url,user:x.user||'',pass:x.pass||'',repo:rep.id};sources.push(ns);rep.src.push(ns.id);nS++;});
+      save('fc-tv',tvLists);save('fc-src',sources);
+      if(!nT&&!nS)throw new Error('Die Listen im Repo ließen sich nicht laden.');
+      rep.kind='fox';rep.name=rep.name||j.name||'Fox-Repo';rep.info=[nT?nT+' Senderliste'+(nT>1?'n':''):'',nS?nS+' Quelle'+(nS>1?'n':''):''].filter(Boolean).join(' · ');
+    }else if(/<html|<a\s+href|multistatus/i.test(lt)){
+      var ty2=/multistatus/i.test(lt)?'webdav':'http';
+      var ns2={id:'s'+Date.now(),name:rep.name||new URL(url).host,type:ty2,url:url,repo:rep.id};
+      var items=await netList(ns2,{});
+      if(!items.length)throw new Error('In diesem Ordner liegen keine Dateien.');
+      sources.push(ns2);save('fc-src',sources);rep.src=[ns2.id];rep.kind='src';rep.name=rep.name||ns2.name;rep.info=items.length+' Einträge';
+    }else throw new Error('Mit diesem Link kann Fox Center nichts anfangen.');
+    rep.t=Date.now();
+    if(!old)repos.push(rep);
+    saveRepos();toast(rep.name+' '+(old?'aktualisiert':'hinzugefügt')+' · '+rep.info,5000);
+    reposSheet();render();
+  }catch(e){toast(errText(e),7000);}
+}
+function removeRepoItems(r){
+  (r.tv||[]).forEach(function(id){delete tvCh[id];idel('tv-'+id);});
+  tvLists=tvLists.filter(function(l){return (r.tv||[]).indexOf(l.id)<0;});
+  sources=sources.filter(function(s){return (r.src||[]).indexOf(s.id)<0;});
+  if(tvSel&&!tvLists.some(function(l){return l.id===tvSel;})){tvSel='';save('fc-tvsel','');}
+  save('fc-tv',tvLists);save('fc-src',sources);
+}
+function delRepo(id){var r=repos.filter(function(x){return x.id===id;})[0];if(!r)return;removeRepoItems(r);repos=repos.filter(function(x){return x.id!==id;});saveRepos();reposSheet();render();toast('Repo entfernt');}
 
 /* ================= Klicks ================= */
 document.getElementById('bnav').addEventListener('click',function(e){var b=e.target.closest('button[data-tab]');if(b){if(b.dataset.tab===tab&&nav.length){nav=[];render();}else go(b.dataset.tab);}});
@@ -1301,6 +1400,13 @@ document.addEventListener('click',async function(e){
     case 'theme':set.theme=k;saveSet();settingsSheet();break;
     case 'minmov':set.minMovie=+k;saveSet();processLib();render();settingsSheet();break;
     case 'tmsave':set.tmdb=$('#tmk').value.trim();saveSet();if(set.tmdb){try{await getJSON('https://api.themoviedb.org/3/configuration?x=1'+tmAuth().q,tmAuth().h);toast('TMDb-Schlüssel funktioniert.');}catch(x){toast('Schlüssel geht nicht: '+errText(x));}}render();break;
+    case 'deepon':deepOn();break;
+    case 'deepgo':closeSheet();deepWait=true;try{await C.askAllFiles();}catch(x){toast(errText(x));}break;
+    case 'rpaste':try{var ct=await navigator.clipboard.readText();if(ct)$('#rUrl').value=ct.trim();}catch(x){toast('Zwischenablage geht hier nicht – halte im Feld gedrückt und wähle Einfügen.');}break;
+    case 'repos':reposSheet();break;
+    case 'repoadd':addRepo($('#rUrl').value,$('#rName').value.trim());break;
+    case 'reporef':{var rr=repos.filter(function(x){return x.id===k;})[0];if(rr)addRepo(rr.url,rr.name,rr);break;}
+    case 'repodel':delRepo(k);break;
     case 'rescan':closeSheet();if(!C)toast('Nur in der App.');else scanAll(false);break;
     case 'clrres':resume={};saveRes();closeSheet();render();toast('Geleert');break;
     case 'upd':closeSheet();checkUpdate(true);break;
@@ -1362,13 +1468,14 @@ tick();setInterval(tick,15000);
 setNav();
 (async function(){
   await loadLibCache();
-  await checkPerm();
+  await checkPerm();if(set.deep)await checkDeep();
   render();
   setTimeout(function(){$('#splash').classList.add('hide');},700);
-  if(C&&anyPerm())scanAll(true);
+  if(C&&(anyPerm()||(set.deep&&deepOk)))scanAll(true);
   var l=curTvList();if(l&&!tvCh[l.id])iget('tv-'+l.id).then(function(c){if(Array.isArray(c)){tvCh[l.id]=c;if(tab==='home')render();}});
 })();
-document.addEventListener('visibilitychange',function(){if(!document.hidden&&C){var had=anyPerm();checkPerm().then(function(){if(!had&&anyPerm())scanAll(true);});}});
+document.addEventListener('visibilitychange',function(){if(!document.hidden&&C){var had=anyPerm();checkPerm().then(function(){if(!had&&anyPerm())scanAll(true);});
+  if(deepWait){checkDeep().then(function(ok){if(ok){deepWait=false;set.deep=true;saveSet();toast('Danke! Fox Center durchsucht jetzt dein ganzes Handy …',5000);scanAll(false);}});}}});
 if(isNative()&&set.autoUpd){
   var lastU=0;try{lastU=Number(localStorage.getItem('fc-upd-t')||0);}catch(e){}
   if(Date.now()-lastU>6*3600e3){try{localStorage.setItem('fc-upd-t',String(Date.now()));}catch(e){}setTimeout(function(){checkUpdate(false);},3500);}

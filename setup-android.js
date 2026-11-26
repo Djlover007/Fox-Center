@@ -41,7 +41,8 @@ const perms = [
   '<uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />',
   '<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />',
   '<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />',
-  '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />',
+  '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />',
+  '<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />',
   '<uses-feature android:name="android.hardware.touchscreen" android:required="false" />',
   '<uses-feature android:name="android.software.leanback" android:required="false" />'
 ];
