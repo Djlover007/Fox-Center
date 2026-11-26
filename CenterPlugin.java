@@ -265,8 +265,8 @@ public class CenterPlugin extends Plugin {
         }).start();
     }
 
-    private static final java.util.regex.Pattern VID = java.util.regex.Pattern.compile("(?i).*\\.(mp4|m4v|mkv|avi|mov|webm|ts|m2ts|mts|wmv|flv|mpe?g|3gp|vob|ogv)$");
-    private static final java.util.regex.Pattern AUD = java.util.regex.Pattern.compile("(?i).*\\.(mp3|flac|m4a|aac|ogg|oga|opus|wav|wma|aiff?)$");
+    private static final java.util.regex.Pattern VID = java.util.regex.Pattern.compile("(?i).*\\.(mp4|m4v|mkv|avi|divx|xvid|mov|qt|webm|ts|m2ts|mts|wmv|asf|flv|f4v|mpe?g|mpe|m2v|m1v|3gp|3g2|vob|ogv|ogm|rm|rmvb|dv|mxf|amv)$");
+    private static final java.util.regex.Pattern AUD = java.util.regex.Pattern.compile("(?i).*\\.(mp3|flac|m4a|aac|ogg|oga|opus|wav|wma|aiff?|ape|mka|ac3|dts|wv|mpc|tta|amr|alac)$");
     private static final java.util.regex.Pattern IMG = java.util.regex.Pattern.compile("(?i).*\\.(jpe?g|png|gif|webp|heic|bmp)$");
 
     private Bitmap fileThumb(File f, int w, int h) {
@@ -655,7 +655,7 @@ public class CenterPlugin extends Plugin {
         }
     }
 
-    // ---------------- Vollbild-Player ----------------
+    // ---------------- Vollbild-Player (Media3 + VLC) ----------------
     @PluginMethod
     public void play(final PluginCall call) {
         final Activity act = getActivity();
@@ -663,250 +663,15 @@ public class CenterPlugin extends Plugin {
         final int start = call.getInt("index", 0);
         final JSObject hdrObj = call.getObject("headers", new JSObject());
         final boolean live = Boolean.TRUE.equals(call.getBoolean("live", false));
+        final String engine = call.getString("engine", "auto");
         if (items.length() == 0 || act == null) {
             call.reject("Nichts zum Abspielen");
             return;
         }
         main.post(() -> {
             try {
-                final int n = items.length();
-                final long[] pos = new long[n];
-                final long[] dur = new long[n];
-                final boolean[] ended = new boolean[n];
-                final int[] idx = {Math.max(0, Math.min(start, n - 1))};
-
-                Map<String, String> hdr = new HashMap<>();
-                Iterator<String> it = hdrObj.keys();
-                String ua = "Mozilla/5.0 (Linux; Android) FoxCenter/1.0";
-                while (it.hasNext()) {
-                    String k = it.next();
-                    if (k.equalsIgnoreCase("User-Agent")) {
-                        ua = hdrObj.getString(k);
-                    } else {
-                        hdr.put(k, hdrObj.getString(k));
-                    }
-                }
-                DefaultHttpDataSource.Factory hf = new DefaultHttpDataSource.Factory()
-                        .setUserAgent(ua)
-                        .setAllowCrossProtocolRedirects(true)
-                        .setConnectTimeoutMs(20000)
-                        .setReadTimeoutMs(30000)
-                        .setDefaultRequestProperties(hdr);
-                DefaultDataSource.Factory df = new DefaultDataSource.Factory(act, hf);
-                final ExoPlayer player = new ExoPlayer.Builder(act)
-                        .setMediaSourceFactory(new DefaultMediaSourceFactory(df))
-                        .setSeekBackIncrementMs(10000)
-                        .setSeekForwardIncrementMs(30000)
-                        .build();
-
-                List<MediaItem> list = new ArrayList<>();
-                for (int i = 0; i < n; i++) {
-                    JSONObject o = items.getJSONObject(i);
-                    String url = o.optString("url", "");
-                    MediaItem.Builder b = new MediaItem.Builder().setUri(url).setMediaId(String.valueOf(i));
-                    String lu = url.toLowerCase();
-                    String type = o.optString("type", "");
-                    if (type.equals("hls") || lu.contains(".m3u8")) {
-                        b.setMimeType(MimeTypes.APPLICATION_M3U8);
-                    } else if (type.equals("dash") || lu.contains(".mpd")) {
-                        b.setMimeType(MimeTypes.APPLICATION_MPD);
-                    }
-                    String sub = o.optString("sub", "");
-                    if (sub.startsWith("http") || sub.startsWith("content")) {
-                        String sm = sub.toLowerCase().endsWith(".vtt") ? MimeTypes.TEXT_VTT : MimeTypes.APPLICATION_SUBRIP;
-                        List<MediaItem.SubtitleConfiguration> subs = new ArrayList<>();
-                        subs.add(new MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub))
-                                .setMimeType(sm).setLanguage("de").setSelectionFlags(C.SELECTION_FLAG_DEFAULT).build());
-                        b.setSubtitleConfigurations(subs);
-                    }
-                    list.add(b.build());
-                }
-                long st0 = 0;
-                try {
-                    st0 = items.getJSONObject(idx[0]).optLong("start", 0);
-                } catch (Exception ignored) {
-                    // egal
-                }
-                player.setMediaItems(list, idx[0], live ? C.TIME_UNSET : st0);
-                player.prepare();
-                player.setPlayWhenReady(true);
-
-                FrameLayout root = new FrameLayout(act);
-                root.setBackgroundColor(Color.BLACK);
-                final PlayerView pv = new PlayerView(act);
-                pv.setPlayer(player);
-                pv.setKeepScreenOn(true);
-                pv.setShowNextButton(n > 1);
-                pv.setShowPreviousButton(n > 1);
-                pv.setShowSubtitleButton(true);
-                pv.setControllerShowTimeoutMs(3500);
-                root.addView(pv, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-
-                final TextView title = new TextView(act);
-                title.setTextColor(Color.WHITE);
-                title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
-                title.setShadowLayer(6, 0, 1, Color.BLACK);
-                title.setPadding(dp(act, 20), dp(act, 16), dp(act, 20), dp(act, 10));
-                title.setBackgroundColor(Color.argb(110, 0, 0, 0));
-                root.addView(title, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP));
-
-                final TextView info = new TextView(act);
-                info.setTextColor(Color.rgb(255, 190, 160));
-                info.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
-                info.setGravity(Gravity.CENTER);
-                info.setPadding(dp(act, 24), dp(act, 12), dp(act, 24), dp(act, 12));
-                info.setBackgroundColor(Color.argb(170, 0, 0, 0));
-                info.setVisibility(View.GONE);
-                root.addView(info, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
-
-                final Runnable upd = () -> {
-                    try {
-                        JSONObject o = items.getJSONObject(idx[0]);
-                        String t = o.optString("title", "");
-                        String s2 = o.optString("subtitle", "");
-                        title.setText(s2.isEmpty() ? t : t + "\n" + s2);
-                    } catch (Exception ignored) {
-                        // egal
-                    }
-                };
-                upd.run();
-                pv.setControllerVisibilityListener((PlayerView.ControllerVisibilityListener) v -> title.setVisibility(v));
-
-                final Dialog d = new Dialog(act, android.R.style.Theme_Black_NoTitleBar_Fullscreen) {
-                    @Override
-                    public boolean dispatchKeyEvent(KeyEvent ev) {
-                        if (ev.getAction() == KeyEvent.ACTION_DOWN) {
-                            int k = ev.getKeyCode();
-                            if (k == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || k == KeyEvent.KEYCODE_SPACE) {
-                                player.setPlayWhenReady(!player.getPlayWhenReady());
-                                pv.showController();
-                                return true;
-                            }
-                            if ((k == KeyEvent.KEYCODE_CHANNEL_UP || k == KeyEvent.KEYCODE_PAGE_UP) && player.hasNextMediaItem()) {
-                                player.seekToNextMediaItem();
-                                return true;
-                            }
-                            if ((k == KeyEvent.KEYCODE_CHANNEL_DOWN || k == KeyEvent.KEYCODE_PAGE_DOWN) && player.hasPreviousMediaItem()) {
-                                player.seekToPreviousMediaItem();
-                                return true;
-                            }
-                            if (!pv.isControllerFullyVisible() && (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER
-                                    || k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT
-                                    || k == KeyEvent.KEYCODE_DPAD_UP || k == KeyEvent.KEYCODE_DPAD_DOWN)) {
-                                if (k == KeyEvent.KEYCODE_DPAD_LEFT && !live) {
-                                    player.seekBack();
-                                } else if (k == KeyEvent.KEYCODE_DPAD_RIGHT && !live) {
-                                    player.seekForward();
-                                } else if (live && k == KeyEvent.KEYCODE_DPAD_UP && player.hasPreviousMediaItem()) {
-                                    player.seekToPreviousMediaItem();
-                                    return true;
-                                } else if (live && k == KeyEvent.KEYCODE_DPAD_DOWN && player.hasNextMediaItem()) {
-                                    player.seekToNextMediaItem();
-                                    return true;
-                                }
-                                pv.showController();
-                                return true;
-                            }
-                        }
-                        return super.dispatchKeyEvent(ev);
-                    }
-                };
-                d.requestWindowFeature(Window.FEATURE_NO_TITLE);
-                d.setContentView(root);
-                Window w = d.getWindow();
-                if (w != null) {
-                    w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-                    w.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON | WindowManager.LayoutParams.FLAG_FULLSCREEN);
-                    w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
-                }
-
-                final Runnable keep = new Runnable() {
-                    @Override
-                    public void run() {
-                        int i = player.getCurrentMediaItemIndex();
-                        if (i >= 0 && i < n) {
-                            pos[i] = player.getCurrentPosition();
-                            long du = player.getDuration();
-                            if (du > 0) {
-                                dur[i] = du;
-                            }
-                        }
-                        if (d.isShowing()) {
-                            main.postDelayed(this, 1000);
-                        }
-                    }
-                };
-
-                player.addListener(new Player.Listener() {
-                    @Override
-                    public void onPlayerError(PlaybackException e) {
-                        info.setVisibility(View.VISIBLE);
-                        info.setText("Das lässt sich hier nicht abspielen (" + e.getErrorCodeName() + ").\n"
-                                + (n > 1 ? "Mit ⏭ weiter zum nächsten. " : "") + "Zurück-Taste schließt.");
-                        pv.showController();
-                    }
-
-                    @Override
-                    public void onMediaItemTransition(MediaItem mi, int reason) {
-                        int prev = idx[0];
-                        int c = player.getCurrentMediaItemIndex();
-                        if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && prev >= 0 && prev < n) {
-                            ended[prev] = true;
-                        }
-                        if (c >= 0 && c < n) {
-                            idx[0] = c;
-                        }
-                        info.setVisibility(View.GONE);
-                        upd.run();
-                        if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && player.getPlayerError() != null) {
-                            player.prepare();
-                        }
-                    }
-
-                    @Override
-                    public void onPlaybackStateChanged(int state) {
-                        if (state == Player.STATE_READY) {
-                            info.setVisibility(View.GONE);
-                        }
-                        if (state == Player.STATE_ENDED) {
-                            ended[idx[0]] = true;
-                            d.dismiss();
-                        }
-                    }
-                });
-
-                d.setOnDismissListener(di -> {
-                    int i = player.getCurrentMediaItemIndex();
-                    if (i >= 0 && i < n && !ended[i]) {
-                        pos[i] = player.getCurrentPosition();
-                        long du = player.getDuration();
-                        if (du > 0) {
-                            dur[i] = du;
-                        }
-                    }
-                    try {
-                        pv.setPlayer(null);
-                        player.release();
-                    } catch (Exception ignored) {
-                        // egal
-                    }
-                    JSArray res = new JSArray();
-                    for (int k = 0; k < n; k++) {
-                        JSObject o = new JSObject();
-                        o.put("pos", pos[k]);
-                        o.put("dur", dur[k]);
-                        o.put("ended", ended[k]);
-                        res.put(o);
-                    }
-                    JSObject r = new JSObject();
-                    r.put("index", idx[0]);
-                    r.put("items", res);
-                    call.resolve(r);
-                });
-                d.show();
-                main.postDelayed(keep, 1000);
-            } catch (Exception e) {
+                new FoxPlayer(act, items, start, hdrObj, live, engine, call::resolve).show();
+            } catch (Throwable e) {
                 call.reject("Player: " + e.getMessage());
             }
         });

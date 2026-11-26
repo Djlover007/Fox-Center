@@ -23,7 +23,7 @@ const pkg = (fs.readFileSync(generated, 'utf8').match(/^\s*package\s+([\w.]+)\s*
 if (!pkg) fail('Paketname nicht lesbar');
 console.log('Android-Paket: ' + pkg);
 
-for (const f of ['MainActivity.java', 'CenterPlugin.java', 'UpdatePlugin.java']) {
+for (const f of ['MainActivity.java', 'CenterPlugin.java', 'FoxPlayer.java', 'UpdatePlugin.java']) {
   const src = fs.readFileSync(f, 'utf8').replace(/^\s*package\s+[\w.]+\s*;/m, 'package ' + pkg + ';');
   fs.writeFileSync(path.join(dir, f), src);
   console.log('kopiert: ' + f);
@@ -100,6 +100,13 @@ if (!g.includes('fox-debug.keystore')) {
   g = g2;
   console.log('Signierschluessel fest eingetragen');
 }
+// VLC-Engine: nur Handy/TV-Prozessoren (ARM) und gepackte Bibliotheken, damit die APK klein bleibt
+if (!g.includes('abiFilters')) {
+  const g2 = g.replace(/defaultConfig\s*\{\s*\n/, "defaultConfig {\n        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a' }\n");
+  if (g2 === g) fail('defaultConfig in build.gradle nicht gefunden');
+  g = g2.replace(/^android\s*\{\s*\n/m, 'android {\n    packagingOptions { jniLibs { useLegacyPackaging true } }\n');
+  console.log('ABI-Filter eingetragen');
+}
 const bn = process.env.BUILD_NUMBER;
 if (bn) {
   const g2 = g.replace(/versionCode\s+\d+/, 'versionCode ' + bn).replace(/versionName\s+"[^"]*"/, 'versionName "1.' + bn + '"');
@@ -113,7 +120,8 @@ if (!g.includes('media3-exoplayer')) {
     "    implementation 'androidx.media3:media3-exoplayer:1.4.1'\n" +
     "    implementation 'androidx.media3:media3-ui:1.4.1'\n" +
     "    implementation 'androidx.media3:media3-exoplayer-hls:1.4.1'\n" +
-    "    implementation 'androidx.media3:media3-exoplayer-dash:1.4.1'\n");
+    "    implementation 'androidx.media3:media3-exoplayer-dash:1.4.1'\n" +
+    "    implementation 'org.videolan.android:libvlc-all:3.6.0'\n");
   if (g2 === g) fail('dependencies { } in build.gradle nicht gefunden');
   g = g2;
   console.log('Player eingetragen');

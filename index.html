@@ -366,7 +366,7 @@ function fsrc(u){if(!u)return '';if(/^(content|file):/.test(u)||u.charAt(0)==='/
 var tT;function toast(m,ms){var t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tT);tT=setTimeout(function(){t.classList.remove('on');},ms||3800);}
 var C=plug('Center');
 
-var set=Object.assign({theme:'dark',tmdb:'',minMovie:40,autoUpd:true,sort:'new',deep:false},load('fc-set',{}));
+var set=Object.assign({theme:'dark',tmdb:'',minMovie:40,autoUpd:true,sort:'new',deep:false,engine:'auto'},load('fc-set',{}));
 var repos=load('fc-repos',[]);       // {id,url,name,kind,t,tv:[ids],src:[ids]}
 var deepOk=false,deepInfo=load('fc-deepinfo',null);
 function applyTheme(){if(set.theme==='system')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',set.theme);}
@@ -553,7 +553,7 @@ async function playVideos(items,idx,opt){
   if(audioOn())au.pause();
   if(C){
     try{
-      var r=await C.play({items:items,index:idx,headers:opt.headers||{},live:!!opt.live});
+      var r=await C.play({items:items,index:idx,headers:opt.headers||{},live:!!opt.live,engine:opt.engine||set.engine||'auto'});
       if(!opt.live&&r&&r.items)r.items.forEach(function(x,i){afterPlay(items[i],x.pos,x.dur,x.ended,opt);});
       if(opt.after)opt.after(r);
       render();
@@ -580,7 +580,7 @@ function webPlayer(items,idx,opt){
 }
 function localItem(v,start){
   var r=resume[v.uri];
-  return {url:v.uri,key:v.uri,title:vTitle(v),subtitle:v.p.ep?vSub(v):(v.p.year?String(v.p.year):''),start:start==null?(r?r.pos:0):start,
+  return {url:v.uri,name:v.name||'',key:v.uri,title:vTitle(v),subtitle:v.p.ep?vSub(v):(v.p.year?String(v.p.year):''),start:start==null?(r?r.pos:0):start,
     meta:{title:vTitle(v),sub:vSub(v),th:v.uri,tm:tmKey(v)}};
 }
 function playLocal(v,fromStart){
@@ -606,8 +606,15 @@ function playQueue(list,i,shuffle){
   if(shuffle){shuf=true;save('fc-shuf',true);qi=Math.floor(Math.random()*queue.length);}
   startTrack();
 }
+var AU_VLC=/\.(wma|ape|aiff?|mka|ac3|dts|wv|mpc|tta|amr|ra|alac)(\?|$)/i;
 function startTrack(){
   var t=queue[qi];if(!t)return;
+  if(C&&(AU_VLC.test(t.name||'')||AU_VLC.test(t.url||''))){
+    // Dieses Tonformat kann die eingebaute Wiedergabe nicht: grosser Player mit VLC-Engine
+    au.pause();var rest=queue.slice(qi);
+    playVideos(rest.map(function(x){return {url:x.url||x.uri,name:x.name||'',title:x.title,subtitle:[x.artist,x.album].filter(Boolean).join(' · '),engine:AU_VLC.test(x.name||x.url||'')?'vlc':''};}),0,{live:true});
+    return;
+  }
   au.src=trackSrc(t);
   au.play().catch(function(){});
   try{if('mediaSession' in navigator){navigator.mediaSession.metadata=new MediaMetadata({title:t.title,artist:t.artist||'',album:t.album||'',artwork:t.art&&thumbs[t.art]?[{src:thumbs[t.art],sizes:'320x320',type:'image/jpeg'}]:[]});}}catch(e){}
@@ -720,7 +727,7 @@ function playChannel(list,i){
 function chLogo(c){var ini=esc((c.n||'?').replace(/[^A-Za-z0-9ÄÖÜäöü]/g,'').slice(0,2).toUpperCase());return '<div class="lt logo2"><b>'+ini+'</b>'+(c.logo?'<img alt="" data-src="'+esc(c.logo)+'">':'')+'</div>';}
 
 /* ================= Netzwerk (DLNA, WebDAV, HTTP) ================= */
-var EXT={video:/\.(mp4|m4v|mkv|avi|mov|webm|ts|m2ts|mts|wmv|flv|mpe?g|3gp|vob|ogv)$/i,audio:/\.(mp3|flac|m4a|aac|ogg|oga|opus|wav|wma|alac|aiff?)$/i,image:/\.(jpe?g|png|gif|webp|heic|bmp)$/i,sub:/\.(srt|vtt)$/i};
+var EXT={video:/\.(mp4|m4v|mkv|avi|divx|xvid|mov|qt|webm|ts|m2ts|mts|wmv|asf|flv|f4v|mpe?g|mpe|m2v|m1v|3gp|3g2|vob|ogv|ogm|rm|rmvb|dv|mxf|amv)$/i,audio:/\.(mp3|flac|m4a|aac|ogg|oga|opus|wav|wma|alac|aiff?|ape|mka|ac3|dts|wv|mpc|tta|amr|ra)$/i,image:/\.(jpe?g|png|gif|webp|heic|bmp)$/i,sub:/\.(srt|vtt)$/i};
 function kindOf(name,mime,cls){
   var s=String(cls||'')+' '+String(mime||'');
   if(/video/i.test(s))return 'video';if(/audio|music/i.test(s))return 'audio';if(/image|photo/i.test(s))return 'image';
@@ -967,7 +974,7 @@ function netPlayItem(it,pg){
   var subFor=function(v){var b=v.name.replace(/\.[^.]+$/,'').toLowerCase();var m=netItems.filter(function(x){return x.kind==='sub'&&x.name.toLowerCase().indexOf(b)===0;});return m.length?m[0].url:'';};
   if(it.kind==='video'){
     var vids=netItems.filter(function(x){return x.kind==='video';}),i=vids.indexOf(it);
-    var items=vids.slice(i,i+30).map(function(v,j){var r=resume[v.url];return {url:v.url,key:v.url,title:cleanName(v.name),subtitle:s.name,sub:subFor(v),start:j===0&&r?r.pos:0,meta:{title:cleanName(v.name),sub:s.name,img:v.img||''}};});
+    var items=vids.slice(i,i+30).map(function(v,j){var r=resume[v.url];return {url:v.url,name:v.name,key:v.url,title:cleanName(v.name),subtitle:s.name,sub:subFor(v),start:j===0&&r?r.pos:0,meta:{title:cleanName(v.name),sub:s.name,img:v.img||''}};});
     return playVideos(items,0,{headers:hdr});
   }
   if(it.kind==='audio'){
@@ -975,7 +982,7 @@ function netPlayItem(it,pg){
     if(s.user){ // Passwort-geschützt: über den großen Player
       return playVideos(auds.map(function(a){return {url:a.url,title:cleanName(a.name),subtitle:a.artist||s.name};}),auds.indexOf(it),{headers:hdr,live:true});
     }
-    return playQueue(auds.map(function(a){return {url:a.url,title:a.name.replace(EXT.audio,'')===a.name?a.name:cleanName(a.name),artist:a.artist||s.name,album:a.album||'',img:a.img||''};}),auds.indexOf(it));
+    return playQueue(auds.map(function(a){return {url:a.url,name:a.name,title:a.name.replace(EXT.audio,'')===a.name?a.name:cleanName(a.name),artist:a.artist||s.name,album:a.album||'',img:a.img||''};}),auds.indexOf(it));
   }
   if(it.kind==='image'){
     if(s.user){toast('Bilder von Quellen mit Passwort gehen leider noch nicht.');return;}
@@ -1180,6 +1187,7 @@ async function settingsSheet(){
   await loadVer();if(set.deep)await checkDeep();
   openSheet('<h3>Einstellungen</h3>'+
     '<div class="srow"><b>Aussehen</b><div class="chips">'+chip('theme','dark','Dunkel',set.theme==='dark')+chip('theme','light','Hell',set.theme==='light')+chip('theme','system','Wie Gerät',set.theme==='system')+'</div></div>'+
+    '<div class="srow"><b>Player</b><div class="chips">'+chip('engine','auto','Automatisch',set.engine==='auto')+chip('engine','vlc','Immer VLC',set.engine==='vlc')+chip('engine','exo','Nur Standard',set.engine==='exo')+'</div><small>Automatisch: Fox Center nimmt den schnellen Android-Player und wechselt bei AVI, MPG, WMV, RMVB, DivX, AC3/DTS-Ton & Co. von selbst zur VLC-Engine.</small></div>'+
     '<div class="srow"><b>Als Film zählen ab</b><div class="chips">'+[20,40,60].map(function(n){return chip('minmov',n,n+' Minuten',set.minMovie===n);}).join('')+'</div><small>Kürzere Videos (z. B. Handy-Clips) findest du unter Videos › Ordner.</small></div>'+
     '<div class="srow"><b>Poster und Inhalt (TMDb)</b><small>Mit einem kostenlosen Schlüssel von themoviedb.org zeigt Fox Center Bilder, Bewertung und Inhalt zu deinen Filmen und Serien.</small><input type="text" id="tmk" placeholder="API-Schlüssel einfügen" value="'+esc(set.tmdb)+'" autocomplete="off" autocapitalize="off"><button class="btn sm" data-act="tmsave">Speichern</button></div>'+
     '<div class="srow line"><div><b>Ganzes Handy durchsuchen</b><br><small>'+(set.deep?(deepOk?'Aktiv'+(deepInfo?' · zuletzt '+deepInfo.added+' zusätzliche Dateien gefunden':''):'Zugriff auf alle Dateien fehlt noch – tippe auf den Schalter'):'Auch Ordner wie Download, WhatsApp, Telegram und die SD-Karte')+'</small></div><input type="checkbox" class="sw" id="deepSw"'+(set.deep&&deepOk?' checked':'')+' aria-label="Ganzes Handy durchsuchen"></div>'+
@@ -1398,6 +1406,7 @@ document.addEventListener('click',async function(e){
       break;}
     // Einstellungen
     case 'theme':set.theme=k;saveSet();settingsSheet();break;
+    case 'engine':set.engine=k;saveSet();settingsSheet();break;
     case 'minmov':set.minMovie=+k;saveSet();processLib();render();settingsSheet();break;
     case 'tmsave':set.tmdb=$('#tmk').value.trim();saveSet();if(set.tmdb){try{await getJSON('https://api.themoviedb.org/3/configuration?x=1'+tmAuth().q,tmAuth().h);toast('TMDb-Schlüssel funktioniert.');}catch(x){toast('Schlüssel geht nicht: '+errText(x));}}render();break;
     case 'deepon':deepOn();break;
